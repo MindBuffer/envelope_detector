@@ -1,0 +1,19 @@
+[package]
+name = "envelope_detector"
+version = "0.1.0"
+authors = [
+    "mitchmindtree <mitchell.nordine@gmail.com>",
+    "JoshuaBatty"
+]
+description = "A collection of types and traits useful for high performance envelope detection over a signal."
+readme = "README.md"
+keywords = ["envelope", "dsp", "rms", "peak", "detection"]
+license = "Apache-2.0/MIT"
+repository = "https://github.com/MindBuffer/envelope_detector.git"
+homepage = "https://github.com/MindBuffer/envelope_detector"
+
+
+[dev-dependencies]
+time_calc = "0.10.1"
+dsp-chain = "0.9.0"
+
