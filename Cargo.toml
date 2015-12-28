@@ -14,6 +14,5 @@ homepage = "https://github.com/MindBuffer/envelope_detector"
 
 
 [dev-dependencies]
+portaudio = "0.6.1"
 time_calc = "0.10.1"
-dsp-chain = "0.9.0"
-
