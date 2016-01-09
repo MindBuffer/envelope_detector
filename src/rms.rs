@@ -76,6 +76,7 @@ impl Rms {
     }
 
     /// The length of the window as a number of frames.
+    #[inline]
     pub fn window_frames(&self) -> usize {
         self.window.len()
     }
@@ -88,6 +89,7 @@ impl Rms {
     /// added.
     ///
     /// Returns `0.0` if the `window` is empty.
+    #[inline]
     pub fn next(&mut self, new_sample: f32) -> f32 {
         // If our **Window** has no length, there's nothing to calculate.
         if self.window.len() == 0 {
