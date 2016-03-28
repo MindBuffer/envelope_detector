@@ -9,9 +9,13 @@
 #![deny(missing_copy_implementations)]
 #![deny(missing_docs)]
 
+extern crate sample;
+
 pub use mode::Mode;
 pub use peak::Peak;
 pub use rms::Rms;
+
+use sample::{Frame, Sample};
 
 pub mod mode;
 pub mod peak;
@@ -24,47 +28,67 @@ pub mod rms;
 /// - Release time.
 /// - Detection mode (Either Peak or RMS).
 ///
-/// The **EnvelopeDetector** supports both [**Mono**](./struct.Mono) and
-/// [**MultiChannel**](./struct.MultiChannel) modes.
+/// Supports processing any `sample::Frame`
 #[derive(Copy, Clone, Debug)]
-pub struct EnvelopeDetector<C> {
-    channel_mode: C,
+pub struct EnvelopeDetector<F, M>
+    where F: Frame,
+          M: Mode<F>,
+{
     attack_gain: f32,
     release_gain: f32,
+    last_env_frame: F,
+    mode: M,
 }
 
-/// A channel mode used by the **EnvelopeDetector** when envelope detection is only needed on a
-/// single channel.
-#[derive(Copy, Clone, Debug)]
-pub struct Mono<D> {
-    detection_mode: D,
-    last_env_sample: f32,
-}
-
-/// A channel mode that allows the **EnvelopeDetector** to handle any number of audio channels.
-#[derive(Clone, Debug)]
-pub struct MultiChannel<D> {
-    channels: Vec<Mono<D>>,
-}
+/// An `EnvelopeDetector` that tracks the signal envelope using RMS.
+pub type RmsEnvelopeDetector<F> = EnvelopeDetector<F, Rms<F>>;
+/// An `EnvelopeDetector` that tracks the full wave `Peak` envelope of a signal.
+pub type PeakEnvelopeDetector<F> = EnvelopeDetector<F, Peak<peak::FullWave>>;
 
 
-/// A single channel **EnvelopeDetector** generic over its detection mode.
-pub type MonoEnvelopeDetector<D> = EnvelopeDetector<Mono<D>>;
-
-/// A multi-channel **EnvelopeDetector** generic over its detection mode.
-pub type MultiChannelEnvelopeDetector<D> = EnvelopeDetector<MultiChannel<D>>;
-
-
-fn calc_gain(frames: f32) -> f32 {
-    ::std::f32::consts::E.powf(-1.0 / frames)
+fn calc_gain(n_frames: f32) -> f32 {
+    ::std::f32::consts::E.powf(-1.0 / n_frames)
 }
 
 
-impl<C> EnvelopeDetector<C> {
+impl<F> EnvelopeDetector<F, Rms<F>>
+    where F: Frame,
+{
 
-    fn new(channel_mode: C, attack_frames: f32, release_frames: f32) -> Self {
+    /// Construct a new **Rms** **EnvelopeDetector**.
+    pub fn rms(rms_window_frames: usize, attack_frames: f32, release_frames: f32) -> Self {
+        let rms = Rms::new(rms_window_frames);
+        Self::new(rms, attack_frames, release_frames)
+    }
+
+    /// Set the duration of the **Rms** window in frames.
+    pub fn set_window_frames(&mut self, n_window_frames: usize) {
+        self.mode.set_window_frames(n_window_frames);
+    }
+
+}
+
+impl<F> EnvelopeDetector<F, Peak<peak::FullWave>>
+    where F: Frame,
+{
+
+    /// Construct a new **Mono** **Peak** **EnvelopeDetector**.
+    pub fn peak(attack_frames: f32, release_frames: f32) -> Self {
+        let peak = Peak::full_wave();
+        Self::new(peak, attack_frames, release_frames)
+    }
+
+}
+
+impl<F, M> EnvelopeDetector<F, M>
+    where F: Frame,
+          M: Mode<F>,
+{
+
+    fn new(mode: M, attack_frames: f32, release_frames: f32) -> Self {
         EnvelopeDetector {
-            channel_mode: channel_mode,
+            mode: mode,
+            last_env_frame: F::equilibrium(),
             attack_gain: calc_gain(attack_frames),
             release_gain: calc_gain(release_frames),
         }
@@ -80,176 +104,20 @@ impl<C> EnvelopeDetector<C> {
         self.attack_gain = calc_gain(frames);
     }
 
-}
+    /// Given the next input signal frame, detect and return the next envelope frame.
+    pub fn next(&mut self, frame: F) -> F {
+        let EnvelopeDetector {
+            attack_gain, release_gain, ref mut mode, ref mut last_env_frame,
+        } = *self;
 
-
-impl<D> Mono<D> {
-
-    /// Construct a new **Mono** from its detection mode.
-    fn new(detection_mode: D) -> Self {
-        Mono {
-            last_env_sample: 0.0,
-            detection_mode: detection_mode,
-        }
-    }
-
-    /// Given the next input signal sample, detect and return the next envelope sample.
-    #[inline]
-    pub fn next(&mut self, sample: f32, attack_gain: f32, release_gain: f32) -> f32
-        where D: Mode,
-    {
-        let mode_sample = self.detection_mode.next_sample(sample);
-        let last_env_sample = self.last_env_sample;
-        let gain = if last_env_sample < mode_sample { attack_gain } else { release_gain };
-        let new_env_sample = mode_sample + gain * (last_env_sample - mode_sample);
-        self.last_env_sample = new_env_sample;
-        new_env_sample
+        let mode_frame = mode.next_frame(frame);
+        let new_env_frame = last_env_frame.zip_map(mode_frame, |l, m| {
+            let gain = if l < m { attack_gain } else { release_gain };
+            let diff = l.add_amp(-m.to_signed_sample());
+            m.add_amp(diff.mul_amp(gain.to_sample()).to_sample())
+        });
+        *last_env_frame = new_env_frame;
+        new_env_frame
     }
 
 }
-
-impl Mono<Rms> {
-
-    /// Construct a new **Rms** **Mono**.
-    pub fn rms(rms_window_frames: usize) -> Mono<Rms> {
-        let rms = Rms::new(rms_window_frames);
-        Self::new(rms)
-    }
-
-    /// Set the duration of the **Rms** window in frames.
-    pub fn set_window_frames(&mut self, n_window_frames: usize) {
-        self.detection_mode.set_window_frames(n_window_frames);
-    }
-
-}
-
-impl Mono<Peak> {
-
-    /// Construct a new **Rms** **Mono**.
-    pub fn peak() -> Mono<Peak> {
-        let peak = Peak::full_wave();
-        Mono::new(peak)
-    }
-
-}
-
-
-impl MonoEnvelopeDetector<Rms> {
-
-    /// Construct a new **Mono** **Rms** **EnvelopeDetector**.
-    pub fn rms(rms_window_frames: usize,
-               attack_frames: f32,
-               release_frames: f32) -> MonoEnvelopeDetector<Rms>
-    {
-        let mono = Mono::rms(rms_window_frames);
-        Self::new(mono, attack_frames, release_frames)
-    }
-
-    /// Set the duration of the **Rms** window in frames.
-    pub fn set_window_frames(&mut self, n_window_frames: usize) {
-        self.channel_mode.set_window_frames(n_window_frames);
-    }
-
-}
-
-impl MonoEnvelopeDetector<Peak> {
-
-    /// Construct a new **Mono** **Peak** **EnvelopeDetector**.
-    pub fn peak(attack_frames: f32,
-                release_frames: f32) -> MonoEnvelopeDetector<Peak>
-    {
-        let mono = Mono::peak();
-        Self::new(mono, attack_frames, release_frames)
-    }
-
-}
-
-impl<D> MonoEnvelopeDetector<D> {
-
-    /// Given the next input signal sample, detect and return the next envelope sample.
-    #[inline]
-    pub fn next(&mut self, sample: f32) -> f32 where D: Mode {
-        self.channel_mode.next(sample, self.attack_gain, self.release_gain)
-    }
-
-}
-
-
-impl<D> MultiChannel<D> {
-
-    /// Resize the `channels` `Vec` to the given size.
-    pub fn resize(&mut self, n_channels: usize) where D: Clone {
-        let len = self.channels.len();
-        if len == n_channels {
-            return;
-        } else if len > n_channels {
-            self.channels.truncate(n_channels);
-        } else if len < n_channels {
-            let clone = self.channels.last().unwrap().clone();
-            let extension = (0..n_channels).map(|_| clone.clone());
-            self.channels.extend(extension);
-        }
-    }
-
-}
-
-
-impl MultiChannelEnvelopeDetector<Rms> {
-
-    /// Construct a new **MultiChannel** **Rms** **EnvelopeDetector**.
-    pub fn rms(rms_window_frames: usize,
-               attack_frames: f32,
-               release_frames: f32,
-               n_channels: usize) -> MultiChannelEnvelopeDetector<Rms>
-    {
-        assert!(n_channels > 0, "We can't do anything with no channels");
-        let multi_channel = MultiChannel {
-            channels: (0..n_channels).map(|_| Mono::rms(rms_window_frames)).collect(),
-        };
-        EnvelopeDetector::new(multi_channel, attack_frames, release_frames)
-    }
-
-    /// Set the duration of the **Rms** window in frames.
-    pub fn set_window_frames(&mut self, n_window_frames: usize) {
-        for channel in &mut self.channel_mode.channels {
-            channel.set_window_frames(n_window_frames);
-        }
-    }
-
-}
-
-impl MultiChannelEnvelopeDetector<Peak> {
-
-    /// Construct a new **MultiChannel** **Peak** **EnvelopeDetector**.
-    pub fn peak(attack_frames: f32,
-                release_frames: f32,
-                n_channels: usize) -> MultiChannelEnvelopeDetector<Peak>
-    {
-        assert!(n_channels > 0, "We can't do anything with no channels");
-        let multi_channel = MultiChannel {
-            channels: (0..n_channels).map(|_| Mono::peak()).collect(),
-        };
-        EnvelopeDetector::new(multi_channel, attack_frames, release_frames)
-    }
-
-}
-
-impl<D> MultiChannelEnvelopeDetector<D> {
-
-    /// Set the number of channels for the **MultiChannelEnvelopeDetector**.
-    pub fn set_channels(&mut self, n_channels: usize) where D: Clone {
-        assert!(n_channels > 0, "We can't do anything with no channels");
-        self.channel_mode.resize(n_channels)
-    }
-
-    /// Given the next input signal sample for the channel at the given index, detect and return
-    /// the next envelope sample for that channel.
-    ///
-    /// **Panics** if the given channel_idx is out of range.
-    #[inline]
-    pub fn next(&mut self, channel_idx: usize, sample: f32) -> f32 where D: Mode {
-        self.channel_mode.channels[channel_idx].next(sample, self.attack_gain, self.release_gain)
-    }
-
-}
-
