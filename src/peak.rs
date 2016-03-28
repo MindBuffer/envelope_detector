@@ -3,6 +3,7 @@
 //! The primary type of interest in this module is the [**Peak**](./struct.Peak) type, generic
 //! over any [**Rectifier**](./trait.Rectifier).
 
+use sample::{Frame, Sample};
 use std::marker::PhantomData;
 
 
@@ -18,29 +19,41 @@ pub enum FullWave {}
 
 
 /// Types that can rectify some incoming signal.
-pub trait Rectifier {
+pub trait Rectifier<F>
+    where F: Frame,
+{
     /// Rectify a single sample of some incoming signal.
-    fn rectify(sample: f32) -> f32;
+    fn rectify(frame: F) -> F;
 }
 
-impl Rectifier for PositiveHalfWave {
+impl<F> Rectifier<F> for PositiveHalfWave
+    where F: Frame,
+{
     #[inline]
-    fn rectify(sample: f32) -> f32 {
-        if sample < 0.0 { 0.0 } else { sample }
+    fn rectify(frame: F) -> F {
+        frame.map(|s| if s < Sample::equilibrium() { Sample::equilibrium() } else { s })
     }
 }
 
-impl Rectifier for NegativeHalfWave {
+impl<F> Rectifier<F> for NegativeHalfWave
+    where F: Frame,
+{
     #[inline]
-    fn rectify(sample: f32) -> f32 {
-        if sample > 0.0 { 0.0 } else { sample }
+    fn rectify(frame: F) -> F {
+        frame.map(|s| if s > Sample::equilibrium() { Sample::equilibrium() } else { s })
     }
 }
 
-impl Rectifier for FullWave {
+impl<F> Rectifier<F> for FullWave
+    where F: Frame,
+{
     #[inline]
-    fn rectify(sample: f32) -> f32 {
-        sample.abs()
+    fn rectify(frame: F) -> F {
+        frame.map(|s| {
+            let signed = s.to_signed_sample();
+            if signed < Sample::equilibrium() { -signed } else { signed }
+                .to_sample()
+        })
     }
 }
 
@@ -84,7 +97,10 @@ impl Peak<NegativeHalfWave> {
 impl<R> Peak<R> {
     /// Return the rectified sample.
     #[inline]
-    pub fn rectify(sample: f32) -> f32 where R: Rectifier {
-        R::rectify(sample)
+    pub fn rectify<F>(frame: F) -> F
+        where R: Rectifier<F>,
+              F: Frame,
+    {
+        R::rectify(frame)
     }
 }
