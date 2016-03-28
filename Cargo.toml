@@ -12,6 +12,8 @@ license = "Apache-2.0/MIT"
 repository = "https://github.com/MindBuffer/envelope_detector.git"
 homepage = "https://github.com/MindBuffer/envelope_detector"
 
+[dependencies]
+sample = "0.5.1"
 
 [dev-dependencies]
 portaudio = "0.6.2"
