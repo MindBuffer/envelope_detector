@@ -14,8 +14,7 @@ extern crate sample;
 pub use mode::Mode;
 pub use peak::Peak;
 pub use rms::Rms;
-
-use sample::{Frame, Sample};
+pub use sample::{Frame, Sample};
 
 pub mod mode;
 pub mod peak;

@@ -92,7 +92,7 @@ impl<F> Rms<F>
     ///
     /// Returns `Frame::equilibrium` if the `window` is empty.
     #[inline]
-    pub fn next(&mut self, new_frame: F) -> F {
+    pub fn next(&mut self, new_frame: F) -> F::Float {
         // If our **Window** has no length, there's nothing to calculate.
         if self.window.len() == 0 {
             return Frame::equilibrium();
@@ -121,10 +121,11 @@ impl<F> Rms<F>
         self.sum = self.sum.add_amp(new_frame_square);
     }
 
-    /// Calculate the RMS for the **Window** in its current state.
-    fn calc_rms(&self) -> F {
+    /// Calculate the RMS for the **Window** in its current state and yield the result as the
+    /// `Frame`s associated `Float` type.
+    fn calc_rms(&self) -> F::Float {
         let num_frames_f = Sample::from_sample(self.window.len() as f32);
-        self.sum.map(|s| (s / num_frames_f).sample_sqrt().to_sample::<F::Sample>())
+        self.sum.map(|s| (s / num_frames_f).sample_sqrt())
     }
 
 }
