@@ -119,4 +119,16 @@ impl<F, M> EnvelopeDetector<F, M>
         new_env_frame
     }
 
+    /// Given the next input signal frame, detect and return the next envelope average across each
+    /// channel for the frame.
+    ///
+    /// The returned value will take the form of the signal's equivalent floating point sample
+    /// format.
+    pub fn next_avg(&mut self, frame: F) -> <F::Sample as Sample>::Float {
+        let next_frame = self.next(frame);
+        let equilibrium: F::Sample = Sample::equilibrium();
+        let sum = next_frame.channels().fold(equilibrium, |sum, s| sum.add_amp(s.to_sample()));
+        sum.to_float_sample() / (F::n_channels() as f32).to_sample()
+    }
+
 }
