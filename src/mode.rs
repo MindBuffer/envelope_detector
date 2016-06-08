@@ -5,25 +5,30 @@
 
 use peak::{self, Peak};
 use rms::Rms;
+use sample::{Frame, Sample};
 
 
 /// The mode used to detect the envelope of a signal.
-pub trait Mode {
+pub trait Mode<F>
+    where F: Frame,
+{
     /// Update state that is unique to the **Mode**.
-    fn next_sample(&mut self, sample: f32) -> f32;
+    fn next_frame(&mut self, frame: F) -> F;
 }
 
-
-impl<R> Mode for Peak<R> where R: peak::Rectifier {
-    fn next_sample(&mut self, sample: f32) -> f32 {
-        Peak::<R>::rectify(sample)
+impl<F, R> Mode<F> for Peak<R>
+    where R: peak::Rectifier<F>,
+          F: Frame,
+{
+    fn next_frame(&mut self, frame: F) -> F {
+        Peak::<R>::rectify(frame)
     }
 }
 
-
-impl Mode for Rms {
-    fn next_sample(&mut self, sample: f32) -> f32 {
-        self.next(sample)
+impl<F> Mode<F> for Rms<F>
+    where F: Frame,
+{
+    fn next_frame(&mut self, frame: F) -> F {
+        self.next(frame).map(|s| s.to_sample::<F::Sample>())
     }
 }
-
