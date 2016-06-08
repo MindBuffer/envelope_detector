@@ -8,7 +8,7 @@ use std;
 
 /// Iteratively extracts the RMS (root mean square) envelope from a window over a signal of
 /// sample `Frame`s.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Rms<F>
     where F: Frame,
 {
@@ -22,6 +22,16 @@ pub struct Rms<F>
     window: std::collections::VecDeque<F::Float>,
     /// The sum total of all sample_squares currently within the **Rms**'s `window` ring buffer.
     sum: F::Float,
+}
+
+impl<F> std::fmt::Debug for Rms<F>
+    where F: Frame,
+          F::Float: std::fmt::Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        write!(f, "Rms {{ frame: {:?}, window: {:?}, sum: {:?} }}",
+               &self.frame, &self.window, &self.sum)
+    }
 }
 
 
