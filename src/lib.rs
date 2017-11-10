@@ -9,7 +9,7 @@
 #![deny(missing_copy_implementations)]
 #![deny(missing_docs)]
 
-extern crate sample;
+pub extern crate sample;
 
 pub use mode::Mode;
 pub use peak::Peak;
