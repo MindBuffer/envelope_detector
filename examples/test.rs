@@ -19,19 +19,19 @@ fn run() -> Result<(), pa::Error> {
     const ATTACK_MS: f64 = 1.0;
     const RELEASE_MS: f64 = 1.0;
 
-    let window = time::Ms(WINDOW_SIZE_MS).samples(SAMPLE_HZ) as usize;
+    let window_size = time::Ms(WINDOW_SIZE_MS).samples(SAMPLE_HZ) as usize;
+    let window = vec![[0.0; CHANNELS]; window_size];
+    let ring_buffer = sample::ring_buffer::Fixed::from(window);
     let attack = time::Ms(ATTACK_MS).samples(SAMPLE_HZ) as f32;
     let release = time::Ms(RELEASE_MS).samples(SAMPLE_HZ) as f32;
-    let mut envelope_detector = EnvelopeDetector::rms(window, attack, release);
+    let mut envelope_detector = EnvelopeDetector::rms(ring_buffer, attack, release);
 
     // Callback used to construct the duplex sound stream.
     let callback = move |pa::InputStreamCallbackArgs { buffer, .. }| {
 
-        let window_frames = time::Ms(WINDOW_SIZE_MS).samples(SAMPLE_HZ) as usize;
         let attack = time::Ms(ATTACK_MS).samples(SAMPLE_HZ) as f32;
         let release = time::Ms(RELEASE_MS).samples(SAMPLE_HZ) as f32;
 
-        envelope_detector.set_window_frames(window_frames);
         envelope_detector.set_attack_frames(attack);
         envelope_detector.set_release_frames(release);
 

@@ -9,12 +9,12 @@
 #![deny(missing_copy_implementations)]
 #![deny(missing_docs)]
 
-extern crate sample;
+pub extern crate sample;
 
 pub use mode::Mode;
 pub use peak::Peak;
 pub use rms::Rms;
-pub use sample::{Frame, Sample};
+pub use sample::{ring_buffer, Frame, Sample};
 
 pub mod mode;
 pub mod peak;
@@ -40,7 +40,7 @@ pub struct EnvelopeDetector<F, M>
 }
 
 /// An `EnvelopeDetector` that tracks the signal envelope using RMS.
-pub type RmsEnvelopeDetector<F> = EnvelopeDetector<F, Rms<F>>;
+pub type RmsEnvelopeDetector<F, S> = EnvelopeDetector<F, Rms<F, S>>;
 /// An `EnvelopeDetector` that tracks the full wave `Peak` envelope of a signal.
 pub type PeakEnvelopeDetector<F> = EnvelopeDetector<F, Peak<peak::FullWave>>;
 
@@ -50,21 +50,15 @@ fn calc_gain(n_frames: f32) -> f32 {
 }
 
 
-impl<F> EnvelopeDetector<F, Rms<F>>
+impl<F, S> EnvelopeDetector<F, Rms<F, S>>
     where F: Frame,
+          S: ring_buffer::Slice<Element=F::Float> + ring_buffer::SliceMut,
 {
-
     /// Construct a new **Rms** **EnvelopeDetector**.
-    pub fn rms(rms_window_frames: usize, attack_frames: f32, release_frames: f32) -> Self {
-        let rms = Rms::new(rms_window_frames);
+    pub fn rms(buffer: ring_buffer::Fixed<S>, attack_frames: f32, release_frames: f32) -> Self {
+        let rms = Rms::new(buffer);
         Self::new(rms, attack_frames, release_frames)
     }
-
-    /// Set the duration of the **Rms** window in frames.
-    pub fn set_window_frames(&mut self, n_window_frames: usize) {
-        self.mode.set_window_frames(n_window_frames);
-    }
-
 }
 
 impl<F> EnvelopeDetector<F, Peak<peak::FullWave>>
