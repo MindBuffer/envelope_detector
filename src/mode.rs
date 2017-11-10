@@ -5,7 +5,7 @@
 
 use peak::{self, Peak};
 use rms::Rms;
-use sample::{Frame, Sample};
+use sample::{ring_buffer, Frame, Sample};
 
 
 /// The mode used to detect the envelope of a signal.
@@ -25,8 +25,9 @@ impl<F, R> Mode<F> for Peak<R>
     }
 }
 
-impl<F> Mode<F> for Rms<F>
+impl<F, S> Mode<F> for Rms<F, S>
     where F: Frame,
+          S: ring_buffer::Slice<Element=F::Float> + ring_buffer::SliceMut,
 {
     fn next_frame(&mut self, frame: F) -> F {
         self.next(frame).map(|s| s.to_sample::<F::Sample>())
